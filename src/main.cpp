@@ -1,5 +1,6 @@
 #include <cctype>
 #include <iostream>
+#include <numeric>
 #include <string>
 #include <vector>
 #include <array>
@@ -36,13 +37,12 @@ std::string read_text_file(std::filesystem::path const& path) {
   std::string result;
   result.resize(size);
 
-  if (not file.read(result.data(), size)) {
+  if (not file.read(result.data(), static_cast<long>(size))) {
     return {};
   }
   
   return result;
 }
-
 
 int main() {
   const auto wordle_answers = []() {
@@ -107,7 +107,8 @@ int main() {
     WRONG_POSITION
   };
 
-  const auto max_tries = 6;
+  std::size_t max_tries = 6;
+  std::size_t tries = 1;
   
   std::vector<std::vector<std::array<char, 2>>> inputs(max_tries);
   for (auto& v : inputs) {
@@ -118,15 +119,13 @@ int main() {
   for (auto& v : status) {
     v = std::vector<Status>(word_to_guess.size(), Status::UNKNOWN);
   }
+
+  constexpr auto green = IM_COL32(0, 255, 0, 255);
+  constexpr auto yellow = IM_COL32(200, 155, 0, 255);
+  constexpr auto black = IM_COL32(0, 0, 0, 255);
+
+  std::size_t current_cell = 0;
   
-  std::size_t counter = 0;
-  std::size_t tries = 1;
-  bool check_result = false;
-
-  const auto green = IM_COL32(0, 255, 0, 255);
-  const auto yellow = IM_COL32(200, 155, 0, 255);
-  const auto black = IM_COL32(0, 0, 0, 255);
-
   bool wait_to_continue = false;
   
   bool is_looping = true;
@@ -134,6 +133,7 @@ int main() {
 
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0) {
+      ImGui_ImplSDL2_ProcessEvent(&event);
       switch (event.type) {
       case SDL_QUIT:
 	is_looping = false;
@@ -142,6 +142,10 @@ int main() {
 	if (wait_to_continue) {
 	  wait_to_continue = false;
 	  word_to_guess = wordle_answers[random_answer(rand)];
+
+	  tries = 1;
+	  current_cell = 0;
+
 	  inputs = std::vector<std::vector<std::array<char, 2>>>(max_tries);
 	  for (auto& v : inputs) {
 	    v = std::vector<std::array<char, 2>>(word_to_guess.size());
@@ -151,13 +155,20 @@ int main() {
 	  for (auto& v : status) {
 	    v = std::vector<Status>(word_to_guess.size(), Status::UNKNOWN);
 	  }
-
-	  tries = 1;
-	  counter = 0;
+	  continue;
+	}
+	
+	switch (event.key.keysym.sym) {
+	case SDLK_BACKSPACE:
+	  int curr = current_cell - 1;
+	  if (curr >= 0) {
+	    current_cell = curr;
+	  }
+	  inputs[tries-1][current_cell] = std::array<char, 2>();
+	  break;
 	}
 	break;
       }
-      ImGui_ImplSDL2_ProcessEvent(&event);
     }
 
     ImGui_ImplOpenGL3_NewFrame();
@@ -182,7 +193,7 @@ int main() {
 
     const auto box_width = ImGui::GetFontSize();
 
-    const auto box_line_width = style.CellPadding.x * word_to_guess.size() + box_width * word_to_guess.size();
+    const auto box_line_width = style.CellPadding.x * static_cast<float>(word_to_guess.size()) + box_width * static_cast<float>(word_to_guess.size());
    
     const auto center_padding = (io.DisplaySize.x - box_line_width) / 2.f;
 
@@ -190,10 +201,9 @@ int main() {
     
     for (std::size_t j = 0; j < tries; j++) {
       for (std::size_t i = 0; i < word_to_guess.size(); i++) {
-	if (counter == i) {
+	if (current_cell == i) {
 	  ImGui::SetKeyboardFocusHere();
 	}
-	const auto label = fmt::format("##foo{}{}", i, j);
 
 	ImGui::SetNextItemWidth(box_width);
 	
@@ -210,28 +220,34 @@ int main() {
 	  ImGui::PushStyleColor(ImGuiCol_FrameBg, black);
 	  break;
 	}
+	
         int flags = ImGuiInputTextFlags_AlwaysOverwrite | ImGuiInputTextFlags_CharsUppercase;
 	if (j < tries - 1) {
 	  flags |= ImGuiInputTextFlags_ReadOnly;
-	}
-	ImGui::InputText(label.c_str(), inputs[j][i].data(), inputs.size(), flags);
-	ImGui::PopStyleColor();
+	}	
+	const auto label = fmt::format("##foo{}{}", i, j);
+	ImGui::InputText(label.c_str(), inputs[j][i].data(), inputs.size(), flags);       
+	
 	if (ImGui::IsItemFocused() && ImGui::IsItemEdited()) {
-	  counter++;
-	  if (counter >= word_to_guess.size()) {
+	  current_cell++;
+	  if (current_cell >= word_to_guess.size()) {
 	    
-	    int counter_valid = 0;
 	    for (std::size_t i = 0; i < word_to_guess.size(); i++) {
-	      const auto character = std::tolower(inputs[j][i][0]);
-	      
+	      const auto character = static_cast<char>(std::tolower(inputs[j][i][0]));	     
 	      if (character == word_to_guess[i]) {
 		status[j][i] = Status::VALID;
-		counter_valid++;
 	      } else if (word_to_guess.find(character) != std::string::npos) {
 		status[j][i] = Status::WRONG_POSITION;
 	      }
 	    }
 
+	    auto counter_valid = 0;
+	    for (auto const& s : status[j]) {
+	      if (s == Status::VALID) {
+		counter_valid++;
+	      }
+	    }
+	    
 	    if (counter_valid == word_to_guess.size()) {
 	      fmt::print("You win!\n");
 	      wait_to_continue = true;
@@ -240,17 +256,19 @@ int main() {
 	      wait_to_continue = true;
 	    } else {	      	    
 	      tries++;
-	      counter = 0;
+	      current_cell = 0;
 	    }
 	    
 	  }
 	}
+
+	ImGui::PopStyleColor();
+	
 	ImGui::SameLine();
       }
       ImGui::NewLine();      
     }
     ImGui::End();
-
 
     ImGui::Render();
     glViewport(0, 0, static_cast<int>(io.DisplaySize.x), static_cast<int>(io.DisplaySize.y));
