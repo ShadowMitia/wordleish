@@ -16,8 +16,7 @@ add_library(glad "${PROJECT_SOURCE_DIR}/external/glad/src/gl.c")
 target_include_directories(glad SYSTEM PUBLIC "${PROJECT_SOURCE_DIR}/external/glad/include/" "${PROJECT_SOURCE_DIR}/external")
 
 ### SOURCE & INCLUDES ###
-
-add_executable(wordle "src/main.cpp" "${PROJECT_SOURCE_DIR}/external/imgui_impl_sdl.cpp" "${PROJECT_SOURCE_DIR}/external/imgui_impl_opengl3.cpp")
+add_executable(wordle "src/main.cpp" "${PROJECT_SOURCE_DIR}/external/imgui_misc/imgui_impl_sdl.cpp" "${PROJECT_SOURCE_DIR}/external/imgui_misc/imgui_impl_opengl3.cpp" "${PROJECT_SOURCE_DIR}/external/imgui_misc/imgui_stdlib.cpp")
 
 target_link_libraries(wordle PUBLIC CONAN_PKG::sdl CONAN_PKG::fmt CONAN_PKG::imgui)
 target_include_directories(wordle SYSTEM PUBLIC "${PROJECT_SOURCE_DIR}/external")

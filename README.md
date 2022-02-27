@@ -8,7 +8,7 @@ Currently has the original list of answers, picks one at random and allows you t
 
 ## Build
 
-See more details [here](github.com/shadowMitia/YACHT)
+See more details [here](https://github.com/ShadowMitia/YACHT)
 
 On Linux:
 
